@@ -19,7 +19,7 @@ batch_size = 100
 img_dim = 784
 z_dim = 100
 a_dim = 100
-intermediate_dim = 500
+intermediate_dim = 300
 nb_epoch = 400
 kl_weight = K.variable(0.)
 
@@ -65,15 +65,15 @@ def sampling_z(args):
 z = Lambda(sampling_z, output_shape=(z_dim,))([z_mean_en, z_logvar_en])
 
 # decode
-g1 = BN()(Dense(intermediate_dim, activation='relu')(z))
+g4 = BN()(Dense(intermediate_dim, activation='relu')(z))
+g6 = BN()(Dense(intermediate_dim, activation='relu')(g4))
+x_mean = Dense(img_dim, activation='sigmoid')(g6)
+
+merged = merge([z, x_s], mode="concat", concat_axis=-1)
+g1 = BN()(Dense(intermediate_dim, activation='relu')(merged))
 g3 = BN()(Dense(intermediate_dim, activation='relu')(g1))
 a_mean_de = Dense(a_dim)(g3)
 a_logvar_de = Dense(a_dim)(g3)
-
-merged = merge([z, a], mode="concat", concat_axis=-1)
-g4 = BN()(Dense(intermediate_dim, activation='relu')(merged))
-g6 = BN()(Dense(intermediate_dim, activation='relu')(g4))
-x_mean = Dense(img_dim, activation='sigmoid')(g6)
 
 # compute loss
 def vae_loss(x, x_mean):
@@ -87,7 +87,7 @@ def vae_loss(x, x_mean):
     return kl_weight * kl_loss + xent_loss
 
 vae = Model(x, x_mean)
-optimizer = Adam(lr=2e-4)
+optimizer = Adam(lr=0.00015)
 vae.compile(optimizer=optimizer, loss=vae_loss)
 
 # train the VAE on MNIST digits
