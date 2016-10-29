@@ -14,12 +14,13 @@ from keras.objectives import binary_crossentropy as bce
 from keras.optimizers import Adam
 from keras.datasets import mnist
 
+save_folder = '/scratch/as793/ssal/'
 batch_size = 100
 img_dim = 784
 z_dim = 100
 a_dim = 100
 intermediate_dim = 500
-nb_epoch = 400
+nb_epoch = 1#400
 kl_weight = K.variable(0.)
 
 def mvn_kl(mean1, logvar1, mean2=None, logvar2=None):
@@ -34,16 +35,23 @@ def mvn_kl(mean1, logvar1, mean2=None, logvar2=None):
 
     return kl
 
-x = Input(batch_shape=(batch_size, img_dim))
+x = Input(shape=(img_dim,))
 
 x_s = Lambda(lambda arg : K.random_binomial(arg.shape, arg),
     output_shape=(img_dim,))(x)
 
-# encode
-h1 = BN()(Dense(intermediate_dim, activation='relu')(x_s))
-h3 = BN()(Dense(intermediate_dim, activation='relu')(h1))
-a_mean_en = Dense(z_dim)(h3)
-a_logvar_en = Dense(z_dim)(h3)
+### encoder ##################################################
+# encode a
+h1 = Dense(intermediate_dim, activation='relu')
+h2 = BN()
+h3 = Dense(intermediate_dim, activation='relu')
+h4 = BN()
+h5a = Dense(a_dim)
+h5b = Dense(a_dim)
+
+tmp = h4(h3(h2(h1(x_s))))
+a_mean_en = h5a(tmp)
+a_logvar_en = h5b(tmp)
 def sampling_a(args):
     a_mean, a_log_var = args
     epsilon = K.random_normal(shape=(batch_size, a_dim))
@@ -51,11 +59,18 @@ def sampling_a(args):
 
 a = Lambda(sampling_a, output_shape=(a_dim,))([a_mean_en, a_logvar_en])
 
+# encode z
+j1 = Dense(intermediate_dim, activation='relu')
+j2 = BN()
+j3 = Dense(intermediate_dim, activation='relu')
+j4 = BN()
+j5a = Dense(z_dim)
+j5b = Dense(z_dim)
+
 merged = merge([a, x_s], mode="concat", concat_axis=-1)
-h4 = BN()(Dense(intermediate_dim, activation='relu')(merged))
-h6 = BN()(Dense(intermediate_dim, activation='relu')(h4))
-z_mean_en = Dense(z_dim)(h6)
-z_logvar_en = Dense(z_dim)(h6)
+tmp = j4(j3(j2(j1(merged))))
+z_mean_en = j5a(tmp)
+z_logvar_en = j5b(tmp)
 def sampling_z(args):
     z_mean, z_log_var = args
     epsilon = K.random_normal(shape=(batch_size, z_dim))
@@ -63,18 +78,30 @@ def sampling_z(args):
 
 z = Lambda(sampling_z, output_shape=(z_dim,))([z_mean_en, z_logvar_en])
 
-# decode
-g1 = BN()(Dense(intermediate_dim, activation='relu')(z))
-g3 = BN()(Dense(intermediate_dim, activation='relu')(g1))
-a_mean_de = Dense(a_dim)(g3)
-a_logvar_de = Dense(a_dim)(g3)
+### decoder #############################################################
+# decode x
+g1 = Dense(intermediate_dim, activation='relu')
+g2 = BN()
+g3 = Dense(intermediate_dim, activation='relu')
+g4 = BN()
+g5 = Dense(intermediate_dim, activation='softmax')
 
-merged = merge([z, a], mode="concat", concat_axis=-1)
-g4 = BN()(Dense(intermediate_dim, activation='relu')(merged))
-g6 = BN()(Dense(intermediate_dim, activation='relu')(g4))
-x_mean = Dense(img_dim, activation='sigmoid')(g6)
+x_mean = g5(g4(g3(g2(g1(z)))))
 
-# compute loss
+# decode a
+k1 = Dense(intermediate_dim, activation='relu')
+k2 = BN()
+k3 = Dense(intermediate_dim, activation='relu')
+k4 = BN()
+k5a = Dense(a_dim)
+k5b = Dense(a_dim)
+
+merged = merge([z, x_s], mode="concat", concat_axis=-1)
+tmp = k4(k3(k2(k1(merged))))
+a_mean_de = k5a(tmp)
+a_logvar_de = k5b(tmp)
+
+### compute loss and make model ########################################
 def vae_loss(x, x_mean):
     xent_loss = img_dim * bce(x_s, x_mean)
 
@@ -89,7 +116,25 @@ vae = Model(x, x_mean)
 optimizer = Adam(lr=2e-4)
 vae.compile(optimizer=optimizer, loss=vae_loss)
 
-# train the VAE on MNIST digits
+### make other models for debugging #####################################
+
+a_encoder = Model(x, [a_mean_en, a_logvar_en])
+
+a_in = Input(shape=(a_dim,))
+merged = merge([a_in, x_s], mode="concat", concat_axis=-1)
+tmp = j4(j3(j2(j1(merged))))
+z_mean_en_out = j5a(tmp)
+z_logvar_en_out = j5b(tmp)
+z_encoder = Model([x, a_in], [z_mean_en_out, z_logvar_en_out])
+
+z_in = Input(shape=(z_dim,))
+merged = merge([z_in, x_s], mode="concat", concat_axis=-1)
+tmp = k4(k3(k2(k1(merged))))
+a_mean_de_out = k5a(tmp)
+a_logvar_de_out = k5b(tmp)
+a_decoder = Model([x, z_in], [a_mean_de_out, a_logvar_de_out])
+
+# train the VAE on MNIST digits #########################################
 (x_train, y_train), (x_test, y_test) = mnist.load_data()
 
 x_train = x_train.astype('float32') / 255.
@@ -115,4 +160,9 @@ vae.fit(x_train, x_train,
         batch_size=batch_size,
         callbacks=[cb],
         validation_data=(x_test, x_test))
+
+vae.save(save_folder + 'vae.h5')
+a_encoder.save(save_folder + 'a_encoder.h5')
+z_encoder.save(save_folder + 'z_encoder.h5')
+a_decoder.save(save_folder + 'a_decoder.h5')
 
