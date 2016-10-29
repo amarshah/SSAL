@@ -43,9 +43,9 @@ x_s = Lambda(lambda arg : K.random_binomial(arg.shape, arg),
 ### encoder ##################################################
 # encode a
 h1 = Dense(intermediate_dim, activation='relu')
-h2 = BN()
+h2 = BN(mode=2)
 h3 = Dense(intermediate_dim, activation='relu')
-h4 = BN()
+h4 = BN(mode=2)
 h5a = Dense(a_dim)
 h5b = Dense(a_dim)
 
@@ -61,9 +61,9 @@ a = Lambda(sampling_a, output_shape=(a_dim,))([a_mean_en, a_logvar_en])
 
 # encode z
 j1 = Dense(intermediate_dim, activation='relu')
-j2 = BN()
+j2 = BN(mode=2)
 j3 = Dense(intermediate_dim, activation='relu')
-j4 = BN()
+j4 = BN(mode=2)
 j5a = Dense(z_dim)
 j5b = Dense(z_dim)
 
@@ -81,18 +81,18 @@ z = Lambda(sampling_z, output_shape=(z_dim,))([z_mean_en, z_logvar_en])
 ### decoder #############################################################
 # decode x
 g1 = Dense(intermediate_dim, activation='relu')
-g2 = BN()
+g2 = BN(mode=2)
 g3 = Dense(intermediate_dim, activation='relu')
-g4 = BN()
+g4 = BN(mode=2)
 g5 = Dense(intermediate_dim, activation='softmax')
 
 x_mean = g5(g4(g3(g2(g1(z)))))
 
 # decode a
 k1 = Dense(intermediate_dim, activation='relu')
-k2 = BN()
+k2 = BN(mode=2)
 k3 = Dense(intermediate_dim, activation='relu')
-k4 = BN()
+k4 = BN(mode=2)
 k5a = Dense(a_dim)
 k5b = Dense(a_dim)
 
