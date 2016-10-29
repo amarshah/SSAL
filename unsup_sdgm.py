@@ -35,7 +35,7 @@ def mvn_kl(mean1, logvar1, mean2=None, logvar2=None):
 
     return kl
 
-x = Input(shape=(img_dim,))
+x = Input(batch_shape=(batch_size, img_dim))
 
 x_s = Lambda(lambda arg : K.random_binomial(arg.shape, arg),
     output_shape=(img_dim,))(x)
